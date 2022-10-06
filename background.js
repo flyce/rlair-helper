@@ -1,30 +1,34 @@
-chrome.runtime.onInstalled.addListener(() => {
-  chrome.storage.sync.set({ progress: 0, lesson: '未选择课程' });
+chrome.tabs.onActivated.addListener((info) => {
+  handleListener(info.tabId);
 });
 
+chrome.tabs.onCreated.addListener((info) => {
+  handleListener(info.openerTabId);
+});
 
-let debuggerEnable = false;
+chrome.tabs.onUpdated.addListener((info) => {
+  handleListener(info);
+});
 
-chrome.tabs.onActivated.addListener((info) => {
-  chrome.tabs.get(info.tabId, (tab) => {
+function handleListener(tabId) {
+  chrome.tabs.get(tabId, (tab) => {
     if (tab.url.includes('https://training.rlair.net/training/course/play')) {
-      if (!debuggerEnable) {
-        debuggerEnable = true;
-        chrome.debugger.attach({ tabId: tab.id }, '1.3', () => {
-          console.log('attach debugger success');
-          chrome.debugger.sendCommand({ tabId: tab.id }, 'Network.enable', () => {
-            console.log('enable network success');
-            chrome.debugger.sendCommand({ tabId: tab.id }, 'Network.setCacheDisabled', { cacheDisabled: true }, () => {
-              console.log('setCacheDisabled success');
-            });
+      chrome.debugger.attach({ tabId: tab.id }, '1.3', () => {
+        if (chrome.runtime.lastError) {
+          console.log('当前用户已在处理中，不会再次启用调试器');
+          return;
+        }
+        console.log('调试器已启动');
+        chrome.debugger.sendCommand({ tabId: tab.id }, 'Network.enable', () => {
+          console.log('网络调试器已启动');
+          chrome.debugger.sendCommand({ tabId: tab.id }, 'Network.setCacheDisabled', { cacheDisabled: true }, () => {
+            console.log('网络缓存已禁用');
           });
         });
-      } else {
-        console.log('debugger already enable');
-      }
+      });
     }
   });
-});
+}
 
 chrome.debugger.onEvent.addListener((debuggerId, messgae, params) => {
   if (messgae === 'Network.responseReceived' && params.response.url.includes('https://training.rlair.net/training/courseNew/timeRecord')) {
@@ -42,7 +46,6 @@ chrome.debugger.onEvent.addListener((debuggerId, messgae, params) => {
           });
           console.log('当前培训已完成，准备切换到下一个');
         } else {
-          chrome.storage.sync.set({ progress });
           console.log('当前培训未完成，继续学习, 进度是', progress);
         }
       } else {
@@ -69,8 +72,3 @@ function moveToNext() {
     nextElement.click();
   }
 }
-
-function moveScroll() {
-  
-}
-
